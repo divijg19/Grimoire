@@ -97,8 +97,8 @@ The transition from Python to Systems languages is a shift in philosophy, not ju
 ## 📈 Evolutionary Path
 
 - [x] **v0.1: Persistence Engine** (Python Standard Lib) - _Completed_
-- [ ] **v0.2: Gameplay Loop** (Random Encounters, Exploration, Combat Logic)
-- [ ] **v0.3: Terminal HUD** (Using `os.system('clear')` and formatted ASCII)
+- [x] **v0.2: Gameplay Loop** (Random Encounters, Exploration, Combat Logic)
+- [x] **v0.3: Terminal HUD** (Using `os.system('clear')` and formatted ASCII)
 - [ ] **v1.0: The Go Refactor** (Porting to Golang to learn Structs and Concurrency)
 - [ ] **v2.0: The Binary Shift** (Refactoring the storage layer into **Zig** for raw performance)
 
