@@ -1,0 +1,29 @@
+{
+    "player": {
+        "name": "Traveller",
+        "class": "Adventurer",
+        "gold": 1557,
+        "hp": 50,
+        "sp": 9,
+        "level": 3,
+        "xp": 2,
+        "inventory": {
+            "torch": 2,
+            "rusty dagger": 1,
+            "magic scroll": 4,
+            "healing_potion": 4,
+            "golden ring": 1,
+            "silver ring": 2,
+            "jeweled crown": 1,
+            "rusty_dagger": 1,
+            "wolf_pelt": 1,
+            "meat": 1
+        },
+        "max_hp": 120
+    },
+    "meta": {
+        "location": "Starting Village",
+        "quests_completed": 0,
+        "command_count": 139
+    }
+}
