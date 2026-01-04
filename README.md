@@ -1,8 +1,13 @@
-# 📜 Project Grimoire (Incorporating Myosotis)
+# Grimoire
 
 **Project Grimoire** is a lightweight, CLI-first Persistence Engine and Mini-Database. It serves as the "Nervous System" for a text-based RPG, bridging the gap between **In-Memory Data Structures** (Python Dictionaries) and **Permanent File Systems** (JSON).
 
-This project represents **Phase 0** of a 10-year polyglot roadmap, focusing on mastering Pythonic logic before refactoring into high-performance systems languages like **Golang** and **Zig**.
+This project represents **Phase 0** of a multi-year polyglot roadmap, focusing on mastering Pythonic logic before refactoring into high-performance systems languages like **Golang** and **Zig**.
+
+**File Structure:**
+
+- `main.py` (The script)
+- `grimoire.json` (The database file - created automatically by the script)
 
 ---
 
@@ -96,6 +101,14 @@ The transition from Python to Systems languages is a shift in philosophy, not ju
 - [ ] **v0.3: Terminal HUD** (Using `os.system('clear')` and formatted ASCII)
 - [ ] **v1.0: The Go Refactor** (Porting to Golang to learn Structs and Concurrency)
 - [ ] **v2.0: The Binary Shift** (Refactoring the storage layer into **Zig** for raw performance)
+
+| Feature          | Python Approach (Current) | Go Approach (Future)                      | **The Lesson**                                                                                                                                          |
+| :--------------- | :------------------------ | :---------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Data Types**   | `dict = {}` (Dynamic)     | `map[string]string` (Static)              | In Python, you can put _anything_ in the DB. In Go, you will be forced to define exactly what the DB holds (Strict Typing).                             |
+| **File Safety**  | `with open(...)`          | `f, err := os.Open()` + `defer f.Close()` | You will lose Python's "Context Manager" magic and learn how to manually manage memory resources using `defer`.                                         |
+| **Errors**       | `try: ... except:`        | `if err != nil { return err }`            | You will stop "catching" errors and start "handling" them as values. This is the biggest philosophy shift in Go.                                        |
+| **JSON**         | `json.load()` (Magic)     | `json.Unmarshal` + Struct Tags            | Python matches JSON fields automatically. In Go, you will have to manually map JSON keys to Struct fields using "tags" (e.g., `` `json:"key_name"` ``). |
+| **Distribution** | Requires Python installed | Compiles to a `.exe` / Binary             | You will see the power of Go here: you can send your `.exe` to a friend, and they can run Grimoire without installing anything.                         |
 
 ---
 
