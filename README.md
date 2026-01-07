@@ -1,8 +1,11 @@
 # Grimoire
 
-Project Grimoire is a small, CLI-first persistence engine and interactive RPG shell. It provides a minimal, deterministic bridge between an in-memory Python state (simple `dict` objects) and a human-editable JSON file on disk. The implementation is intentionally compact and zero-dependency so it can be studied, extended, and later ported to systems languages (Go, Zig) as part of a polyglot learning roadmap.
+Project Grimoire is a small, CLI-first persistence engine and interactive RPG shell. It began as a compact, zero-dependency Python reference implementation (the original `main.py`) that stores a deterministic in-memory state and persists it to a human-editable JSON file. The codebase has since been refactored into Go to exercise a clean-architecture, local-first, typed implementation:
 
-This README is synchronized to the current `main.py` and documents the REPL, one-shot commands, gameplay mechanics, persistence behaviour, admin features, constants, and useful examples.
+- Python reference: `main.py` (historical, still present for reference and portability examples)
+- Go refactor: `cmd/grimoire` (binary entrypoint) and `internal/` (pure engine, ports, adapters, and CLI UI)
+
+This README documents the project broadly (design, commands, mechanics, persistence) and includes notes for both the original Python implementation and the current Go refactor.
 
 ---
 
@@ -35,13 +38,15 @@ Grimoire exposes both an interactive REPL (play mode) and simple one-shot comman
 
 Files
 
-- `main.py` — the engine and CLI entrypoint (implements REPL, commands, persistence, combat and admin).
+- `cmd/grimoire` — Go CLI entrypoint (build with `go build ./cmd/grimoire`).
+- `internal/` — Go implementation (pure engine in `internal/engine`, ports, adapters, and `internal/ui/cli` for the interactive shell).
+- `main.py` — the original Python reference implementation (kept for documentation and portability examples).
 - `grimoire.json` — the JSON save file (created automatically if missing).
 - Temporary atomic write file used during saves: `grimoire.json.tmp` (handled internally).
 
 Quickstart
 
-Requirements: Python 3.12+ (no external pip packages).
+Python reference: Requirements: Python 3.12+ (no external pip packages).
 
 Show status (one-shot):
 
@@ -49,7 +54,7 @@ Show status (one-shot):
 python main.py status
 ```
 
-Enter interactive REPL:
+Enter interactive REPL (Python):
 
 ```
 python main.py play
@@ -57,7 +62,15 @@ python main.py play
 python main.py
 ```
 
-One-shot commands can be run directly from the shell; see the "CLI" section below.
+Go refactor: Requirements: Go 1.20+ (modules enabled). Build and run the binary:
+
+```
+go build ./cmd/grimoire
+./grimoire           # interactive REPL mode
+./grimoire status    # one-shot status
+```
+
+One-shot commands can be run directly from the shell in either implementation; see the "CLI" section below.
 
 ---
 
@@ -329,15 +342,37 @@ python main.py reset
 
 Roadmap
 
-This project is intentionally small and experiential in nature. Next improvements that preserve the zero-dependency core:
+The roadmap below documents historical and planned milestones. Entries are non-destructive: older entries remain for traceability. Work done during the Go refactor and subsequent polish steps is included.
 
-- Add unit tests for command handlers (`status`, `explore`, `hunt`, `use`, `rest`, `admin`).
-- Add file locking to support multi-process safety.
-- Improve numeric parsing to accept negative numbers and floats where appropriate.
-- Add a configurable HUD width and more display options (ASCII art, themes).
-- Port to Go to learn static typing and compile-time checks, then optionally refactor storage layer to Zig for memory control and speed.
+| Version | Status | Notes | Next actions |
+|---|---|---|---|
+| v0.0 (Python reference) | Completed | Original compact reference implementation in `main.py`. Provides REPL, one-shot commands, persistence to `grimoire.json`, combat, items, and admin helpers. | Historical; keep for portability and examples. |
+| v1.0 (Go refactor) | Implemented | Clean-architecture Go implementation: `internal/engine` (pure rules), `internal/ports` (interfaces), `internal/adapters` (RNG/Store), `internal/ui/cli` (REPL/UI), and `cmd/grimoire` (binary). | Maintain parity with Python, document API boundaries, and publish build instructions. |
+| v1.1 (UI & UX polish) | In progress / Applied | Colorized CLI, compact `help`, `RenderHP` compact view, deterministic inventory ordering, bolded headers, and minor event rendering improvements. | Finalize visual parity, add snapshot tests for HUD rendering. |
+| v1.2 (Tests & CI) | Planned | Unit tests for engine rules (combat, XP/leveling, rest, inventory helpers); table-driven tests for event emission; CI job for `gofmt`, `go vet`, and tests. | Add test harness, write table-driven tests, configure CI (GitHub Actions/other). |
+| v1.3 (Hardening) | Planned | File-locking for safe multi-process saves; adapter hardening (Store + RNG); small interface tests to guarantee adapter behavior. | Implement lock-aware `Store` adapter and integration tests. |
+| v1.4 (Performance & tooling) | Planned | Benchmarks, profiling, and developer tooling (formatters, linters). | Add `go test -bench` suites and CI benchmarking jobs. |
+| v2.0 (Zig storage refactor) | Long-term / Planned | Optional refactor to implement the storage layer or critical fast-paths in Zig for fine-grained memory control and performance. The engine's Go interfaces (`Store`, `RNG`) will guide a minimal adapter surface for Zig interop. | Design FFI adapter, prototype storage adapter, ensure cross-platform build story. |
+
+Notes:
+- The roadmap preserves prior goals while documenting the Go refactor and follow-up steps. Entries above are intentionally concise; see `internal/` for the current Go layout and `main.py` for the original Python semantics.
+- If you prefer a different organization (milestone per Git tag, or split per repo), I can produce a sequenced changelog or Git-friendly milestones next.
 
 ---
+
+Roadmap progress (summary)
+
+| Item | Status | Notes |
+|---|---:|---|
+| Go refactor (`cmd/grimoire`, `internal/`) | Done | Binary builds; clean-architecture layout implemented (`internal/engine`, `internal/ports`, `internal/adapters`, `internal/ui/cli`). |
+| HUD/UI polish (compact help, colors, compact HP view) | Done | `internal/ui/cli` updated: compact `help`, `RenderHP`, colored output and prompt, inventory sorting. |
+| Combat RNG guards & HP persistence | Done | Fixed RNG range guards and persisted player HP on win in `internal/engine/combat.go`. |
+| Unit tests for engine (Go) | Planned | Add table-driven tests for combat, XP/leveling, rest, inventory. |
+| Event emission tests | In Progress | UI now renders events; add assertions that events reflect state transitions. |
+| File locking / concurrent safety | Planned | Consider advisory locks or single-writer server for multi-process use. |
+| CI: `gofmt`/`go vet`/tests | Planned | Add a CI job to run formatting, vetting and tests on push. |
+| Documentation updates | In Progress | README updated to document Go refactor and quickstart; this table tracks recent work. |
+
 
 License & contact
 
