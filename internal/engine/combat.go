@@ -32,7 +32,6 @@ func ResolveCombat(
 	enemy EnemyTemplate,
 	rng RNG,
 ) (CombatResult, Events) {
-
 	events := Events{}
 	player := &state.Player
 
@@ -50,7 +49,12 @@ func ResolveCombat(
 		// ----------------
 		pMin := 1 + level
 		pMax := 2 + level
-		pDmg := pMin + rng.Intn(pMax-pMin+1)
+		// safety: ensure range is non-negative to avoid panic in RNG.Intn
+		pRange := pMax - pMin + 1
+		if pRange <= 0 {
+			pRange = 1
+		}
+		pDmg := pMin + rng.Intn(pRange)
 
 		enemyHP -= pDmg
 		if enemyHP < 0 {
@@ -65,7 +69,7 @@ func ResolveCombat(
 		})
 
 		if enemyHP <= 0 {
-			// Victory
+			// Victory: persist player's remaining HP into the state
 			result := CombatResult{
 				Outcome: "win",
 				XP:      enemy.XP,
@@ -85,6 +89,7 @@ func ResolveCombat(
 				Gold:    enemy.Gold,
 			})
 
+			player.HP = playerHP
 			return result, events
 		}
 
@@ -93,7 +98,15 @@ func ResolveCombat(
 		// ----------------
 		eMin := enemy.AttackMin
 		eMax := enemy.AttackMax
-		eDmg := eMin + rng.Intn(eMax-eMin+1)
+		// guard against malformed templates where max < min
+		if eMax < eMin {
+			eMax = eMin
+		}
+		eRange := eMax - eMin + 1
+		if eRange <= 0 {
+			eRange = 1
+		}
+		eDmg := eMin + rng.Intn(eRange)
 
 		playerHP -= eDmg
 		if playerHP < 0 {

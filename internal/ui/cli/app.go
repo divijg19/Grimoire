@@ -27,13 +27,13 @@ func NewApp(state *engine.State, store ports.Store, rng ports.RNG) *App {
 func (a *App) Run() {
 	reader := bufio.NewScanner(os.Stdin)
 
-	fmt.Println("Grimoire — interactive mode. Type 'help'.")
+	fmt.Println(cs("Grimoire — interactive mode. Type 'help'.", bold, cyan))
 	RenderHUD(a.state)
 
 	for {
-		fmt.Print("> ")
+		fmt.Print(cs("> ", bold, cyan))
 		if !reader.Scan() {
-			fmt.Println("\nExiting and saving...")
+			fmt.Println(cs("\nExiting and saving...", yellow))
 			_ = a.store.Save(a.state)
 			return
 		}

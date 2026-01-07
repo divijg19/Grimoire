@@ -8,7 +8,7 @@ import (
 
 func (a *App) handle(events engine.Events, err error) {
 	if err != nil {
-		fmt.Println("Error:", err)
+		fmt.Println(cs("Error: "+err.Error(), bold, red))
 		return
 	}
 
@@ -16,7 +16,8 @@ func (a *App) handle(events engine.Events, err error) {
 		renderEvent(e)
 	}
 
-	RenderHUD(a.state)
+	// After handling events, show compact HP-only UI for minimal output.
+	RenderHP(a.state)
 	_ = a.store.Save(a.state)
 }
 
@@ -24,28 +25,28 @@ func renderEvent(e engine.Event) {
 	switch ev := e.(type) {
 
 	case engine.EncounterStarted:
-		fmt.Printf("You encountered a %s.\n", ev.EnemyID)
+		fmt.Println(cs(fmt.Sprintf("You encountered a %s.", ev.EnemyID), bold, yellow))
 
 	case engine.DamageDealt:
 		if ev.Target == "player" {
-			fmt.Printf("You took %d damage (%d HP left).\n", ev.Amount, ev.HPLeft)
+			fmt.Println(c(fmt.Sprintf("You took %d damage (%d HP left).", ev.Amount, ev.HPLeft), red))
 		} else {
-			fmt.Printf("You dealt %d damage (%d HP left).\n", ev.Amount, ev.HPLeft)
+			fmt.Println(c(fmt.Sprintf("You dealt %d damage (%d HP left).", ev.Amount, ev.HPLeft), green))
 		}
 
 	case engine.EnemyDefeated:
-		fmt.Printf("Enemy defeated! +%d XP, +%d gold.\n", ev.XP, ev.Gold)
+		fmt.Println(c(fmt.Sprintf("Enemy defeated! +%d XP, +%d gold.", ev.XP, ev.Gold), green))
 
 	case engine.PlayerDefeated:
-		fmt.Println("You were defeated.")
+		fmt.Println(cs("You were defeated.", bold, red))
 
 	case engine.LevelUp:
-		fmt.Printf("Level up! Level %d. Max HP %d.\n", ev.NewLevel, ev.NewMaxHP)
+		fmt.Println(cs(fmt.Sprintf("Level up! Level %d. Max HP %d.", ev.NewLevel, ev.NewMaxHP), bold, magenta))
 
 	case engine.ItemAdded:
-		fmt.Printf("Obtained %s x%d.\n", ev.ItemID, ev.Count)
+		fmt.Println(c(fmt.Sprintf("Obtained %s x%d.", ev.ItemID, ev.Count), cyan))
 
 	case engine.GoldGained:
-		fmt.Printf("Gained %d gold.\n", ev.Amount)
+		fmt.Println(c(fmt.Sprintf("Gained %d gold.", ev.Amount), yellow))
 	}
 }

@@ -47,23 +47,23 @@ func (a *App) dispatch(line string) {
 
 	case "use":
 		if len(args) == 0 {
-			fmt.Println("Usage: use <item_id>")
+			fmt.Println(c("Usage: use <item_id>", yellow))
 			return
 		}
 		events, err = engine.UseItem(a.state, args[0], a.rng)
 
 	case "save":
 		_ = a.store.Save(a.state)
-		fmt.Println("Game saved.")
+		fmt.Println(c("Game saved.", green))
 		return
 
 	case "exit", "quit":
 		_ = a.store.Save(a.state)
-		fmt.Println("Game saved. Goodbye.")
+		fmt.Println(c("Game saved. Goodbye.", green))
 		os.Exit(0)
 
 	default:
-		fmt.Println("Unknown command. Type 'help'.")
+		fmt.Println(c("Unknown command. Type 'help'.", yellow))
 		return
 	}
 

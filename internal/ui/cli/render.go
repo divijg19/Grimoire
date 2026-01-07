@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/divijg19/Grimoire/internal/engine"
 )
@@ -34,6 +35,18 @@ func c(s string, clr color) string {
 	return string(clr) + s + string(reset)
 }
 
+// cs applies multiple color/format codes then a single reset.
+func cs(s string, clrs ...color) string {
+	if noColor {
+		return s
+	}
+	pref := ""
+	for _, cl := range clrs {
+		pref += string(cl)
+	}
+	return pref + s + string(reset)
+}
+
 // ================================
 // Symbols
 // ================================
@@ -55,10 +68,13 @@ func RenderHUD(state *engine.State) {
 	title := fmt.Sprintf(" %s (%s) - Lv %d ", p.Name, p.Class, p.Level)
 	loc := state.Meta.Location
 
-	header := "|" + padRight(title, width-2-len(loc)) + loc + "|"
+	//header := "|" + padRight(title, width-2-len(loc)) + loc + "|"
 
 	fmt.Println(c(hr, cyan))
-	fmt.Println(c(header, cyan))
+	// keep padding calculations on raw strings, then apply bold+cyan to the
+	// title portion when printing so alignment stays correct.
+	leftRaw := padRight(title, width-2-len(loc))
+	fmt.Println(cs("|"+leftRaw, bold, cyan) + cs(loc+"|", cyan))
 
 	// HP bar
 	hpBar := bar(p.HP, p.MaxHP, 30)
@@ -71,28 +87,50 @@ func RenderHUD(state *engine.State) {
 	// SP bar
 	spBar := "[" + repeat("●", min(p.SP, 12)) + repeat(" ", max(0, 12-p.SP)) + "]"
 	spLine := fmt.Sprintf("| SP %s %s %d", spBar, spark, p.SP)
-	fmt.Println(c(padRight(spLine, width-1)+"|", magenta))
+	fmt.Println(cs(padRight(spLine, width-1)+"|", magenta, bold))
 
 	// XP
 	need := engine.XPToNext(p.Level)
 	xpBar := bar(p.XP, need, 30)
 	xpLine := fmt.Sprintf("| XP %s %d/%d", xpBar, p.XP, need)
-	fmt.Println(c(padRight(xpLine, width-1)+"|", blue))
+	fmt.Println(cs(padRight(xpLine, width-1)+"|", blue, bold))
 
 	// Resources
 	res := fmt.Sprintf(
 		"| Gold: %d | Commands: %d",
 		p.Gold, state.Meta.CommandCount,
 	)
-	fmt.Println(c(padRight(res, width-1)+"|", cyan))
+	fmt.Println(cs(padRight(res, width-1)+"|", cyan, bold))
 
 	// Inventory
-	fmt.Println(c("| Inventory:", cyan))
+	fmt.Println(cs("| Inventory:", bold, cyan))
 	if len(p.Inventory) == 0 {
 		fmt.Println(c("|  (empty)", dim))
 	} else {
 		renderInventory(p, width)
 	}
+
+	fmt.Println(c(hr, cyan))
+}
+
+// RenderHP prints a compact view showing only the HP line (used after commands)
+func RenderHP(state *engine.State) {
+	p := state.Player
+	width := 64
+
+	hr := "+" + repeat("-", width-2) + "+"
+	title := fmt.Sprintf(" %s (%s) - Lv %d ", p.Name, p.Class, p.Level)
+	loc := state.Meta.Location
+
+	leftRaw := padRight(title, width-2-len(loc))
+	// compact header with bold title
+	fmt.Println(c(hr, cyan))
+	fmt.Println(cs("|"+leftRaw, bold, cyan) + cs(loc+"|", cyan))
+
+	// HP line only
+	hpBar := bar(p.HP, p.MaxHP, 30)
+	hpLine := fmt.Sprintf("| HP %s %s %d/%d", hpBar, heart, p.HP, p.MaxHP)
+	fmt.Println(colorByRatio(hpLine, p.HP, p.MaxHP))
 
 	fmt.Println(c(hr, cyan))
 }
@@ -108,9 +146,12 @@ func renderInventory(p engine.Player, width int) {
 	}
 
 	var items []entry
-	for id, c := range p.Inventory {
-		items = append(items, entry{id, c})
+	for id, cnt := range p.Inventory {
+		items = append(items, entry{id, cnt})
 	}
+
+	// keep inventory display deterministic
+	sort.Slice(items, func(i, j int) bool { return items[i].id < items[j].id })
 
 	colW := (width - 6) / 2
 	for i := 0; i < len(items); i += 2 {
