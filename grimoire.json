@@ -2,28 +2,32 @@
     "player": {
         "name": "Traveller",
         "class": "Adventurer",
-        "gold": 1557,
-        "hp": 50,
-        "sp": 9,
+        "gold": 1640,
+        "hp": 120,
+        "max_hp": 120,
+        "sp": 1,
         "level": 3,
-        "xp": 2,
+        "xp": 146,
         "inventory": {
-            "torch": 2,
-            "rusty dagger": 1,
-            "magic scroll": 4,
-            "healing_potion": 4,
+            "bear_claw": 1,
+            "bone_shield": 1,
+            "coin_pouch": 2,
             "golden ring": 1,
-            "silver ring": 2,
+            "healing_potion": 1,
             "jeweled crown": 1,
-            "rusty_dagger": 1,
-            "wolf_pelt": 1,
-            "meat": 1
-        },
-        "max_hp": 120
+            "magic scroll": 4,
+            "meat": 1,
+            "orcish_blade": 1,
+            "rusty dagger": 1,
+            "rusty_dagger": 2,
+            "silver ring": 2,
+            "torch": 2,
+            "wolf_pelt": 1
+        }
     },
     "meta": {
         "location": "Starting Village",
         "quests_completed": 0,
-        "command_count": 139
+        "command_count": 153
     }
 }
