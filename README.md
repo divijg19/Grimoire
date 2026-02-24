@@ -376,4 +376,4 @@ Roadmap progress (summary)
 
 License & contact
 
-This project is a learning exercise; no license is included by default. If you intend to reuse or distribute, add a LICENSE file to reflect your preferred terms.
+This project is a learning exercise; no license is included by default. 
