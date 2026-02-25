@@ -2,7 +2,7 @@
   "player": {
     "name": "Traveller",
     "class": "Adventurer",
-    "gold": 2069,
+    "gold": 2089,
     "hp": 23,
     "max_hp": 130,
     "sp": 0,
@@ -28,6 +28,6 @@
   "meta": {
     "location": "Starting Village",
     "quests_completed": 0,
-    "command_count": 228
+    "command_count": 230
   }
 }

@@ -110,6 +110,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.GotoBottom()
 			return m, nil
 
+		case "ctrl+k":
+			m.viewport.ScrollUp(1)
+			return m, nil
+
+		case "ctrl+j":
+			m.viewport.ScrollDown(1)
+			return m, nil
+
 		case "up":
 			if len(m.history) == 0 {
 				break
@@ -159,10 +167,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
-			m.viewport.ScrollUp(3)
+			m.viewport.ScrollUp(wheelScrollLines)
 			return m, nil
 		case tea.MouseButtonWheelDown:
-			m.viewport.ScrollDown(3)
+			m.viewport.ScrollDown(wheelScrollLines)
+			return m, nil
+		}
+		if m.handleScrollbarMouse(msg) {
 			return m, nil
 		}
 	}
@@ -306,22 +317,21 @@ func (m *model) layout() {
 
 	inputContentWidth := max(1, leftOuter-inputPanelStyle.GetHorizontalFrameSize())
 	m.input.Width = max(1, inputContentWidth-2)
-	inputHeight := lipgloss.Height(renderInputPanel(inputContentWidth, m.input.View()))
+	inputHeight := inputPanelStyle.GetVerticalFrameSize() + promptContentHeight
 	footerHeight := lipgloss.Height(renderFooter(availWidth))
+	titleHeight := lipgloss.Height(titleStyle.Render(eventLogTitle))
+	logFrameHeight := logPanelStyle.GetVerticalFrameSize()
 
 	logOuterHeight := availHeight - hudHeight - inputHeight - footerHeight
-	minLogOuter := logPanelStyle.GetVerticalFrameSize() + lipgloss.Height(titleStyle.Render(eventLogTitle)) + 1
-	if logOuterHeight < minLogOuter {
-		logOuterHeight = minLogOuter
-	}
-	logInnerHeight := logOuterHeight - logPanelStyle.GetVerticalFrameSize() - lipgloss.Height(titleStyle.Render(eventLogTitle))
+	logInnerHeight := logOuterHeight - logFrameHeight - titleHeight
 	if logInnerHeight < 1 {
 		logInnerHeight = 1
 	}
 
 	innerLogWidth := max(1, leftOuter-logPanelStyle.GetHorizontalFrameSize())
+	viewportWidth := innerLogWidth
 
-	m.viewport.Width = innerLogWidth
+	m.viewport.Width = viewportWidth
 	m.viewport.Height = logInnerHeight
 	m.viewport.SetContent(strings.Join(m.logs, "\n"))
 	m.viewport.GotoBottom()
@@ -351,7 +361,7 @@ func (m model) View() string {
 	hud := renderHUDPanel(m.state, max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize()))
 
 	logTitle := titleStyle.Render(eventLogTitle)
-	logPane := logPanelStyle.Width(max(1, leftOuter-logPanelStyle.GetHorizontalFrameSize())).Render(logTitle + "\n" + m.viewport.View())
+	logPane := logPanelStyle.Width(max(1, leftOuter-logPanelStyle.GetHorizontalFrameSize())).Render(logTitle + "\n" + m.renderLogBody())
 
 	footer := renderFooter(availWidth)
 	input := renderInputPanel(inputContentWidth, m.input.View())
@@ -373,7 +383,8 @@ func (m model) minRenderableHeight(width int) int {
 	leftOuter, _ := splitColumnOuterWidths(width)
 	hudHeight := lipgloss.Height(renderHUDPanel(m.state, max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize())))
 	inputContentWidth := max(1, leftOuter-inputPanelStyle.GetHorizontalFrameSize())
-	inputHeight := lipgloss.Height(renderInputPanel(inputContentWidth, m.input.View()))
+	_ = inputContentWidth
+	inputHeight := inputPanelStyle.GetVerticalFrameSize() + promptContentHeight
 	footerHeight := lipgloss.Height(renderFooter(width))
 	minLogOuter := logPanelStyle.GetVerticalFrameSize() + lipgloss.Height(titleStyle.Render(eventLogTitle)) + 1
 	return hudHeight + inputHeight + footerHeight + minLogOuter
@@ -480,6 +491,159 @@ func renderFooter(width int) string {
 		return ""
 	}
 	return footerStyle.Width(width).Render(truncateText(footerHint, width))
+}
+
+func (m model) renderLogBody() string {
+	body := padLinesRight(m.viewport.View(), m.viewport.Width)
+	if m.viewport.Width <= 0 || m.viewport.Height <= 0 {
+		return body
+	}
+
+	total := len(m.logs)
+	visible := max(1, m.viewport.Height)
+	thumbTop, thumbHeight := scrollbarThumbMetrics(visible, total, m.viewport.YOffset)
+
+	lines := strings.Split(body, "\n")
+	if len(lines) > visible {
+		lines = lines[:visible]
+	}
+	for len(lines) < visible {
+		lines = append(lines, strings.Repeat(" ", m.viewport.Width))
+	}
+
+	for i := 0; i < len(lines); i++ {
+		track := scrollbarTrackStyle.Render(scrollbarTrackRune)
+		if i >= thumbTop && i < thumbTop+thumbHeight {
+			track = scrollbarThumbStyle.Render(scrollbarThumbRune)
+		}
+
+		r := []rune(lines[i])
+		if len(r) < m.viewport.Width {
+			r = append(r, []rune(strings.Repeat(" ", m.viewport.Width-len(r)))...)
+		}
+		if m.viewport.Width > 1 {
+			lines[i] = string(r[:m.viewport.Width-1]) + track
+		} else {
+			lines[i] = track
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func padLinesRight(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lineWidth := len([]rune(line))
+		if lineWidth < width {
+			lines[i] = line + strings.Repeat(" ", width-lineWidth)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m *model) handleScrollbarMouse(msg tea.MouseMsg) bool {
+	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+		return false
+	}
+
+	scrollbarX, scrollbarY, scrollbarHeight, ok := m.scrollbarGeometry()
+	if !ok {
+		return false
+	}
+	if msg.X != scrollbarX || msg.Y < scrollbarY || msg.Y >= scrollbarY+scrollbarHeight {
+		return false
+	}
+
+	total := len(m.logs)
+	visible := max(1, m.viewport.Height)
+	maxOffset := max(0, total-visible)
+	if maxOffset == 0 {
+		m.viewport.SetYOffset(0)
+		return true
+	}
+
+	clickPos := msg.Y - scrollbarY
+	thumbTop, thumbHeight := scrollbarThumbMetrics(visible, total, m.viewport.YOffset)
+
+	if clickPos < thumbTop {
+		m.viewport.HalfPageUp()
+		return true
+	}
+	if clickPos >= thumbTop+thumbHeight {
+		m.viewport.HalfPageDown()
+		return true
+	}
+
+	den := max(1, visible-thumbHeight)
+	rel := clickPos - thumbHeight/2
+	if rel < 0 {
+		rel = 0
+	}
+	if rel > den {
+		rel = den
+	}
+	target := (rel * maxOffset) / den
+	m.viewport.SetYOffset(target)
+	return true
+}
+
+func (m model) scrollbarGeometry() (x int, y int, height int, ok bool) {
+	if m.width <= 0 || m.height <= 0 || m.viewport.Height <= 0 {
+		return 0, 0, 0, false
+	}
+
+	availWidth, _ := renderArea(m.width, m.height)
+	if availWidth < minContentWidth {
+		return 0, 0, 0, false
+	}
+
+	leftOuter, _ := splitColumnOuterWidths(availWidth)
+	hudContentWidth := max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize())
+	hudHeight := lipgloss.Height(renderHUDPanel(m.state, hudContentWidth))
+
+	logPaneTop := outerMarginTop + hudHeight
+	logContentLeft := outerMarginLeft + logPanelStyle.GetHorizontalFrameSize()/2
+	logContentTop := logPaneTop + logPanelStyle.GetVerticalFrameSize()/2
+	titleHeight := lipgloss.Height(titleStyle.Render(eventLogTitle))
+
+	scrollbarX := logContentLeft + m.viewport.Width - 1
+	scrollbarY := logContentTop + titleHeight
+	return scrollbarX, scrollbarY, m.viewport.Height, true
+}
+
+func scrollbarThumbMetrics(visibleLines, totalLines, offset int) (thumbTop int, thumbHeight int) {
+	if visibleLines <= 0 {
+		return 0, 1
+	}
+	if totalLines <= visibleLines {
+		return 0, visibleLines
+	}
+
+	maxOffset := max(1, totalLines-visibleLines)
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > maxOffset {
+		offset = maxOffset
+	}
+
+	thumbHeight = max(1, visibleLines*visibleLines/totalLines)
+	if thumbHeight > visibleLines {
+		thumbHeight = visibleLines
+	}
+
+	thumbTop = 0
+	if visibleLines-thumbHeight > 0 {
+		thumbTop = (offset * (visibleLines - thumbHeight)) / maxOffset
+	}
+
+	return thumbTop, thumbHeight
 }
 
 func truncateText(s string, maxWidth int) string {
@@ -618,14 +782,16 @@ var (
 	logPanelStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("8")).
-			Padding(0, 1)
+			Padding(0, 0, 0, 1)
 
 	inputPanelStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("8")).
 			Padding(0, 1)
 
-	footerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	footerStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	scrollbarTrackStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	scrollbarThumbStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 
 	outerFrameStyle = lipgloss.NewStyle().
 			Margin(outerMarginTop, outerMarginRight, outerMarginBottom, outerMarginLeft)
@@ -646,8 +812,11 @@ const (
 	introLine           = "This is full-screen mode. Type 'help' for commands."
 	eventLogTitle       = "Event Log"
 	commandsTitle       = "Commands"
-	footerHint          = "Enter: run  •  ↑/↓: history  •  PgUp/PgDn/Home/End or wheel: scroll log  •  Ctrl+C: save & quit"
+	footerHint          = "Enter: run  •  ↑/↓: history  •  Ctrl+J/K or wheel: line scroll log  •  Click scrollbar  •  PgUp/PgDn/Home/End  •  Ctrl+C: save & quit"
 	promptExampleLine1  = "Example: help | explore | hunt 2 | rest 1"
 	promptExampleLine2  = "Use: use healing_potion | save | exit"
 	promptContentHeight = 3
+	wheelScrollLines    = 1
+	scrollbarTrackRune  = "│"
+	scrollbarThumbRune  = "█"
 )
