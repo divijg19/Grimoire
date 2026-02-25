@@ -173,9 +173,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.ScrollDown(wheelScrollLines)
 			return m, nil
 		}
-		if m.handleScrollbarMouse(msg) {
-			return m, nil
-		}
 	}
 
 	var cmd tea.Cmd
@@ -361,7 +358,7 @@ func (m model) View() string {
 	hud := renderHUDPanel(m.state, max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize()))
 
 	logTitle := titleStyle.Render(eventLogTitle)
-	logPane := logPanelStyle.Width(max(1, leftOuter-logPanelStyle.GetHorizontalFrameSize())).Render(logTitle + "\n" + m.renderLogBody())
+	logPane := logPanelStyle.Width(max(1, leftOuter-logPanelStyle.GetHorizontalFrameSize())).Render(logTitle + "\n" + m.viewport.View())
 
 	footer := renderFooter(availWidth)
 	input := renderInputPanel(inputContentWidth, m.input.View())
@@ -480,8 +477,8 @@ func renderInventoryPanel(state *engine.State, contentWidth, contentHeight int) 
 }
 
 func renderInputPanel(contentWidth int, inputView string) string {
-	hint1 := dimStyle.Render(promptExampleLine1)
-	hint2 := dimStyle.Render(promptExampleLine2)
+	hint1 := dimStyle.Render(truncateText(promptExampleLine1, contentWidth))
+	hint2 := dimStyle.Render(truncateText(promptExampleLine2, contentWidth))
 	panelBody := strings.Join([]string{inputView, hint1, hint2}, "\n")
 	return inputPanelStyle.Width(max(1, contentWidth)).Height(promptContentHeight).Render(panelBody)
 }
@@ -491,159 +488,6 @@ func renderFooter(width int) string {
 		return ""
 	}
 	return footerStyle.Width(width).Render(truncateText(footerHint, width))
-}
-
-func (m model) renderLogBody() string {
-	body := padLinesRight(m.viewport.View(), m.viewport.Width)
-	if m.viewport.Width <= 0 || m.viewport.Height <= 0 {
-		return body
-	}
-
-	total := len(m.logs)
-	visible := max(1, m.viewport.Height)
-	thumbTop, thumbHeight := scrollbarThumbMetrics(visible, total, m.viewport.YOffset)
-
-	lines := strings.Split(body, "\n")
-	if len(lines) > visible {
-		lines = lines[:visible]
-	}
-	for len(lines) < visible {
-		lines = append(lines, strings.Repeat(" ", m.viewport.Width))
-	}
-
-	for i := 0; i < len(lines); i++ {
-		track := scrollbarTrackStyle.Render(scrollbarTrackRune)
-		if i >= thumbTop && i < thumbTop+thumbHeight {
-			track = scrollbarThumbStyle.Render(scrollbarThumbRune)
-		}
-
-		r := []rune(lines[i])
-		if len(r) < m.viewport.Width {
-			r = append(r, []rune(strings.Repeat(" ", m.viewport.Width-len(r)))...)
-		}
-		if m.viewport.Width > 1 {
-			lines[i] = string(r[:m.viewport.Width-1]) + track
-		} else {
-			lines[i] = track
-		}
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-func padLinesRight(s string, width int) string {
-	if width <= 0 {
-		return s
-	}
-
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lineWidth := len([]rune(line))
-		if lineWidth < width {
-			lines[i] = line + strings.Repeat(" ", width-lineWidth)
-		}
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-func (m *model) handleScrollbarMouse(msg tea.MouseMsg) bool {
-	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
-		return false
-	}
-
-	scrollbarX, scrollbarY, scrollbarHeight, ok := m.scrollbarGeometry()
-	if !ok {
-		return false
-	}
-	if msg.X != scrollbarX || msg.Y < scrollbarY || msg.Y >= scrollbarY+scrollbarHeight {
-		return false
-	}
-
-	total := len(m.logs)
-	visible := max(1, m.viewport.Height)
-	maxOffset := max(0, total-visible)
-	if maxOffset == 0 {
-		m.viewport.SetYOffset(0)
-		return true
-	}
-
-	clickPos := msg.Y - scrollbarY
-	thumbTop, thumbHeight := scrollbarThumbMetrics(visible, total, m.viewport.YOffset)
-
-	if clickPos < thumbTop {
-		m.viewport.HalfPageUp()
-		return true
-	}
-	if clickPos >= thumbTop+thumbHeight {
-		m.viewport.HalfPageDown()
-		return true
-	}
-
-	den := max(1, visible-thumbHeight)
-	rel := clickPos - thumbHeight/2
-	if rel < 0 {
-		rel = 0
-	}
-	if rel > den {
-		rel = den
-	}
-	target := (rel * maxOffset) / den
-	m.viewport.SetYOffset(target)
-	return true
-}
-
-func (m model) scrollbarGeometry() (x int, y int, height int, ok bool) {
-	if m.width <= 0 || m.height <= 0 || m.viewport.Height <= 0 {
-		return 0, 0, 0, false
-	}
-
-	availWidth, _ := renderArea(m.width, m.height)
-	if availWidth < minContentWidth {
-		return 0, 0, 0, false
-	}
-
-	leftOuter, _ := splitColumnOuterWidths(availWidth)
-	hudContentWidth := max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize())
-	hudHeight := lipgloss.Height(renderHUDPanel(m.state, hudContentWidth))
-
-	logPaneTop := outerMarginTop + hudHeight
-	logContentLeft := outerMarginLeft + logPanelStyle.GetHorizontalFrameSize()/2
-	logContentTop := logPaneTop + logPanelStyle.GetVerticalFrameSize()/2
-	titleHeight := lipgloss.Height(titleStyle.Render(eventLogTitle))
-
-	scrollbarX := logContentLeft + m.viewport.Width - 1
-	scrollbarY := logContentTop + titleHeight
-	return scrollbarX, scrollbarY, m.viewport.Height, true
-}
-
-func scrollbarThumbMetrics(visibleLines, totalLines, offset int) (thumbTop int, thumbHeight int) {
-	if visibleLines <= 0 {
-		return 0, 1
-	}
-	if totalLines <= visibleLines {
-		return 0, visibleLines
-	}
-
-	maxOffset := max(1, totalLines-visibleLines)
-	if offset < 0 {
-		offset = 0
-	}
-	if offset > maxOffset {
-		offset = maxOffset
-	}
-
-	thumbHeight = max(1, visibleLines*visibleLines/totalLines)
-	if thumbHeight > visibleLines {
-		thumbHeight = visibleLines
-	}
-
-	thumbTop = 0
-	if visibleLines-thumbHeight > 0 {
-		thumbTop = (offset * (visibleLines - thumbHeight)) / maxOffset
-	}
-
-	return thumbTop, thumbHeight
 }
 
 func truncateText(s string, maxWidth int) string {
@@ -789,9 +633,7 @@ var (
 			BorderForeground(lipgloss.Color("8")).
 			Padding(0, 1)
 
-	footerStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	scrollbarTrackStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	scrollbarThumbStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	footerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 	outerFrameStyle = lipgloss.NewStyle().
 			Margin(outerMarginTop, outerMarginRight, outerMarginBottom, outerMarginLeft)
@@ -802,7 +644,7 @@ const (
 	minContentWidth  = minTerminalWidth - outerMarginLeft - outerMarginRight
 	columnGapCols    = 0
 
-	outerMarginTop    = 1
+	outerMarginTop    = 0
 	outerMarginRight  = 0
 	outerMarginBottom = 0
 	outerMarginLeft   = 1
@@ -812,11 +654,9 @@ const (
 	introLine           = "This is full-screen mode. Type 'help' for commands."
 	eventLogTitle       = "Event Log"
 	commandsTitle       = "Commands"
-	footerHint          = "Enter: run  •  ↑/↓: history  •  Ctrl+J/K or wheel: line scroll log  •  Click scrollbar  •  PgUp/PgDn/Home/End  •  Ctrl+C: save & quit"
+	footerHint          = "Enter: run  •  ↑/↓: history  •  Wheel/Ctrl+J/K: line scroll log  •  PgUp/PgDn/Home/End  •  Ctrl+C: save & quit"
 	promptExampleLine1  = "Example: help | explore | hunt 2 | rest 1"
 	promptExampleLine2  = "Use: use healing_potion | save | exit"
 	promptContentHeight = 3
 	wheelScrollLines    = 1
-	scrollbarTrackRune  = "│"
-	scrollbarThumbRune  = "█"
 )

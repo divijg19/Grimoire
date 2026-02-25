@@ -24,6 +24,7 @@ Table of contents
   - Explore & Hunt semantics
   - Rest & SP
 - Persistence & savefile handling
+- Testing
 - Admin mode
 - Environment variables & flags
 - Constants and tuning knobs
@@ -236,6 +237,40 @@ Because the engine rewrites the entire file on each save, keep backups if you ru
 
 ---
 
+Testing
+
+The Go codebase now includes focused unit and regression tests across mechanics, persistence adapters, and TUI render helpers.
+
+Run all tests:
+
+```
+go test ./...
+```
+
+Run focused test packages:
+
+```
+go test ./internal/engine
+go test ./internal/adapters
+go test ./internal/ui/tui
+```
+
+Current coverage focus by package:
+
+- `internal/engine`
+  - Item ID normalization and inventory dedup behavior
+  - Mechanics: `explore`, `hunt`, `rest`, deterministic combat outcomes, XP/level progression
+- `internal/adapters`
+  - JSON load normalization
+  - Corrupt-save fallback/rename behavior
+  - Save/load round-trip regression checks
+- `internal/ui/tui`
+  - Layout split and viewport sizing invariants
+  - Render helper regressions (`renderArea`, truncation, footer and resize-message behavior)
+  - Input panel height and small-terminal warning stability
+
+---
+
 Admin mode
 
 Admin operations allow direct manipulation of the in-memory state and are gated by an environment secret:
@@ -342,38 +377,24 @@ python main.py reset
 
 Roadmap
 
-The roadmap below documents historical and planned milestones. Entries are non-destructive: older entries remain for traceability. Work done during the Go refactor and subsequent polish steps is included.
+Single source-of-truth roadmap for completed and planned milestones.
 
-| Version | Status | Notes | Next actions |
+| Milestone | Status | Notes | Next actions |
 |---|---|---|---|
-| v0.0 (Python reference) | Completed | Original compact reference implementation in `main.py`. Provides REPL, one-shot commands, persistence to `grimoire.json`, combat, items, and admin helpers. | Historical; keep for portability and examples. |
-| v1.0 (Go refactor) | Implemented | Clean-architecture Go implementation: `internal/engine` (pure rules), `internal/ports` (interfaces), `internal/adapters` (RNG/Store), `internal/ui/tui` (alt-screen UI), and `cmd/grimoire` (binary). | Maintain parity with Python, document API boundaries, and publish build instructions. |
-| v1.1 (UI & UX polish) | In progress / Applied | Colorized CLI, compact `help`, `RenderHP` compact view, deterministic inventory ordering, bolded headers, and minor event rendering improvements. | Finalize visual parity, add snapshot tests for HUD rendering. |
-| v1.2 (Tests & CI) | Planned | Unit tests for engine rules (combat, XP/leveling, rest, inventory helpers); table-driven tests for event emission; CI job for `gofmt`, `go vet`, and tests. | Add test harness, write table-driven tests, configure CI (GitHub Actions/other). |
-| v1.3 (Hardening) | Planned | File-locking for safe multi-process saves; adapter hardening (Store + RNG); small interface tests to guarantee adapter behavior. | Implement lock-aware `Store` adapter and integration tests. |
-| v1.4 (Performance & tooling) | Planned | Benchmarks, profiling, and developer tooling (formatters, linters). | Add `go test -bench` suites and CI benchmarking jobs. |
-| v2.0 (Zig storage refactor) | Long-term / Planned | Optional refactor to implement the storage layer or critical fast-paths in Zig for fine-grained memory control and performance. The engine's Go interfaces (`Store`, `RNG`) will guide a minimal adapter surface for Zig interop. | Design FFI adapter, prototype storage adapter, ensure cross-platform build story. |
-
-Notes:
-- The roadmap preserves prior goals while documenting the Go refactor and follow-up steps. Entries above are intentionally concise; see `internal/` for the current Go layout and `main.py` for the original Python semantics.
-- If you prefer a different organization (milestone per Git tag, or split per repo), I can produce a sequenced changelog or Git-friendly milestones next.
-
----
-
-Roadmap progress (summary)
-
-| Item | Status | Notes |
-|---|---:|---|
-| Go refactor (`cmd/grimoire`, `internal/`) | Done | Binary builds; clean-architecture layout implemented (`internal/engine`, `internal/ports`, `internal/adapters`, `internal/ui/tui`). |
-| HUD/UI polish (compact help, colors, compact HP view) | Done | `internal/ui/cli` updated: compact `help`, `RenderHP`, colored output and prompt, inventory sorting. |
-| Combat RNG guards & HP persistence | Done | Fixed RNG range guards and persisted player HP on win in `internal/engine/combat.go`. |
-| Unit tests for engine (Go) | Planned | Add table-driven tests for combat, XP/leveling, rest, inventory. |
-| Event emission tests | In Progress | UI now renders events; add assertions that events reflect state transitions. |
-| File locking / concurrent safety | Planned | Consider advisory locks or single-writer server for multi-process use. |
-| CI: `gofmt`/`go vet`/tests | Planned | Add a CI job to run formatting, vetting and tests on push. |
-| Documentation updates | In Progress | README updated to document Go refactor and quickstart; this table tracks recent work. |
+| v0.0 (Python reference) | Completed | Original compact implementation in `main.py` with one-shot commands, REPL, persistence, combat, items, and admin helpers. | Keep for portability and semantic reference. |
+| v1.0 (Go refactor) | Completed | Clean architecture implemented across `cmd/grimoire` and `internal/{engine,ports,adapters,ui}` with full-screen TUI and CLI fallback. | Maintain parity and keep boundaries documented. |
+| v1.1 (UI & UX polish) | Completed | Layout/clipping fixes, prompt/hud/inventory stability, compact command help, and improved event rendering. | Add optional snapshot-style rendering checks if desired. |
+| v1.2 (TUI completion) | Completed | Full-screen alt-screen TUI reached feature parity with commands, stabilized layout behavior, and retained `--cli` fallback mode. | Keep event rendering and interaction hints aligned with gameplay changes. |
+| v1.3 (Testing foundation) | Completed | Unit/regression suites now cover engine mechanics, inventory normalization, adapter persistence paths, and focused TUI render/layout helpers. | Expand event-shape assertions and command-dispatch tests. |
+| v1.4 (CI automation) | Planned | Repository has test coverage but no automated validation pipeline yet. | Add CI to run `gofmt`, `go vet`, and `go test ./...` on push/PR. |
+| v1.5 (Installer artifacts) | Planned | Publish versioned release artifacts via GitHub Actions and support curl-based install flow for Linux/macOS users. | Add release workflow, checksum/signing step, and documented `curl | sh` installer entrypoint. |
+| v1.6 (Hardening) | Planned | Concurrent save safety and adapter contract robustness are still open. | Add file-locking strategy and integration tests. |
+| v1.7 (Performance & tooling) | Planned | Benchmark and profiling workflows are not yet in place. | Add benchmark suites and lint/format tooling integration. |
+| v2.0 (Optional Zig storage) | Long-term / Planned | Optional storage fast-path in Zig via existing `Store` interface boundary. | Design/validate FFI adapter and cross-platform build path. |
 
 
 License & contact
 
 This project is a learning exercise; no license is included by default. If you intend to reuse or distribute, add a LICENSE file to reflect your preferred terms.
+
+Feel free to open an issue or reach out if you have questions, suggestions, or want to contribute!
