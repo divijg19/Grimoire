@@ -180,6 +180,10 @@ func Rest(state *State, sp int) (Events, error) {
 // UseItem applies item effects.
 func UseItem(state *State, itemID string, rng RNG) (Events, error) {
 	events := Events{}
+	itemID = NormalizeItemID(itemID)
+	if itemID == "" {
+		return events, errors.New("invalid item id")
+	}
 
 	if !HasItem(&state.Player, itemID, 1) {
 		return events, errors.New("item not in inventory")
