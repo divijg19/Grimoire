@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -27,7 +28,7 @@ func NewApp(state *engine.State, store ports.Store, rng ports.RNG) *App {
 
 func (a *App) Run() error {
 	m := newModel(a.state, a.store, a.rng)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
 }
@@ -51,7 +52,7 @@ type model struct {
 
 func newModel(state *engine.State, store ports.Store, rng ports.RNG) model {
 	input := textinput.New()
-	input.Placeholder = "Type command (help, explore, hunt 2, rest 1, use healing_potion, save, exit)"
+	input.Placeholder = promptPlaceholder
 	input.Focus()
 	input.Prompt = "❯ "
 	input.CharLimit = 256
@@ -68,8 +69,8 @@ func newModel(state *engine.State, store ports.Store, rng ports.RNG) model {
 		historyPos: -1,
 	}
 	m.addLines(
-		"Welcome to Grimoire.",
-		"This is full-screen mode. Type 'help' for commands.",
+		welcomeLine,
+		introLine,
 	)
 	return m
 }
@@ -92,6 +93,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.store.Save(m.state)
 			m.quitting = true
 			return m, tea.Quit
+
+		case "pgup":
+			m.viewport.HalfPageUp()
+			return m, nil
+
+		case "pgdown":
+			m.viewport.HalfPageDown()
+			return m, nil
+
+		case "home":
+			m.viewport.GotoTop()
+			return m, nil
+
+		case "end":
+			m.viewport.GotoBottom()
+			return m, nil
 
 		case "up":
 			if len(m.history) == 0 {
@@ -136,6 +153,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.layout()
+			return m, nil
+		}
+
+	case tea.MouseMsg:
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			m.viewport.ScrollUp(3)
+			return m, nil
+		case tea.MouseButtonWheelDown:
+			m.viewport.ScrollDown(3)
 			return m, nil
 		}
 	}
@@ -263,21 +290,30 @@ func (m *model) layout() {
 	if m.width == 0 || m.height == 0 {
 		return
 	}
-	leftWidth, _ := splitMainWidths(m.width)
-	hud := renderHUDPanel(m.state, leftWidth)
+	leftOuter, _ := splitMainWidths(m.width)
+	leftInner := max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize())
+	hud := renderHUDPanel(m.state, leftInner)
 	hudHeight := lipgloss.Height(hud)
 
-	inputHeight := lipgloss.Height(inputPanelStyle.Width(max(18, leftWidth)).Render(m.input.View()))
+	inputInner := max(1, leftOuter-inputPanelStyle.GetHorizontalFrameSize())
+	m.input.Width = max(1, inputInner-2)
+	inputHeight := inputPanelStyle.GetVerticalFrameSize() + 1
 	footerHeight := lipgloss.Height(footerStyle.Render("x"))
 
-	logHeight := m.height - hudHeight - inputHeight - footerHeight
-	if logHeight < 4 {
-		logHeight = 4
+	logOuterHeight := m.height - hudHeight - inputHeight - footerHeight
+	minLogOuter := logPanelStyle.GetVerticalFrameSize() + 2
+	if logOuterHeight < minLogOuter {
+		logOuterHeight = minLogOuter
+	}
+	logInnerHeight := logOuterHeight - logPanelStyle.GetVerticalFrameSize() - lipgloss.Height(titleStyle.Render(eventLogTitle))
+	if logInnerHeight < 1 {
+		logInnerHeight = 1
 	}
 
-	innerLogWidth := max(10, leftWidth-logPanelStyle.GetHorizontalFrameSize())
+	innerLogWidth := max(1, leftOuter-logPanelStyle.GetHorizontalFrameSize())
+
 	m.viewport.Width = innerLogWidth
-	m.viewport.Height = logHeight
+	m.viewport.Height = logInnerHeight
 	m.viewport.SetContent(strings.Join(m.logs, "\n"))
 	m.viewport.GotoBottom()
 }
@@ -290,22 +326,30 @@ func (m model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "Loading..."
 	}
-	if m.width < 60 || m.height < 16 {
-		return warnStyle.Render("Terminal too small. Resize to at least 60x16.")
+	if m.width < 60 || m.height < 14 {
+		return warnStyle.Render("Terminal too small. Resize to at least 60x14.")
 	}
 
-	leftWidth, rightWidth := splitMainWidths(m.width)
+	leftOuter, rightOuter := splitMainWidths(m.width)
+	leftInner := max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize())
+	rightInner := max(1, rightOuter-sidePanelStyle.GetHorizontalFrameSize())
+	inputInner := max(1, leftOuter-inputPanelStyle.GetHorizontalFrameSize())
+	m.input.Width = max(1, inputInner-2)
 
-	hud := renderHUDPanel(m.state, leftWidth)
+	hud := renderHUDPanel(m.state, leftInner)
 
-	logTitle := titleStyle.Render("Event Log")
-	logPane := logPanelStyle.Width(max(18, leftWidth)).Render(logTitle + "\n" + m.viewport.View())
+	logTitle := titleStyle.Render(eventLogTitle)
+	logPane := logPanelStyle.Width(max(1, leftOuter-logPanelStyle.GetHorizontalFrameSize())).Render(logTitle + "\n" + m.viewport.View())
 
-	footer := footerStyle.Render("Enter: run  •  ↑/↓: history  •  Ctrl+C: save & quit")
-	input := inputPanelStyle.Width(max(18, leftWidth)).Render(m.input.View())
+	footer := footerStyle.Render(footerHint)
+	input := inputPanelStyle.
+		Width(inputInner).
+		Height(1).
+		Render(m.input.View())
 
 	leftColumn := lipgloss.JoinVertical(lipgloss.Left, hud, logPane, input)
-	rightPanel := renderInventoryPanel(m.state, rightWidth, lipgloss.Height(leftColumn))
+	rightInnerHeight := max(1, lipgloss.Height(leftColumn)-sidePanelStyle.GetVerticalFrameSize())
+	rightPanel := renderInventoryPanel(m.state, rightInner, rightInnerHeight)
 	mainRow := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, " ", rightPanel)
 
 	return lipgloss.JoinVertical(lipgloss.Left, mainRow, footer)
@@ -314,17 +358,26 @@ func (m model) View() string {
 func splitMainWidths(totalWidth int) (int, int) {
 	gap := 1
 	right := totalWidth / 3
-	if right < 24 {
-		right = 24
+	minRight := sidePanelStyle.GetHorizontalFrameSize() + 18
+	minLeft := max(
+		sidePanelStyle.GetHorizontalFrameSize()+24,
+		max(
+			logPanelStyle.GetHorizontalFrameSize()+24,
+			inputPanelStyle.GetHorizontalFrameSize()+24,
+		),
+	)
+
+	if right < minRight {
+		right = minRight
 	}
 	if right > 36 {
 		right = 36
 	}
 
 	left := totalWidth - right - gap
-	if left < 30 {
-		left = 30
-		right = max(24, totalWidth-left-gap)
+	if left < minLeft {
+		left = minLeft
+		right = max(minRight, totalWidth-left-gap)
 	}
 
 	return left, right
@@ -348,11 +401,11 @@ func renderHUDPanel(state *engine.State, width int) string {
 	return sidePanelStyle.Width(width).Render(strings.Join(lines, "\n"))
 }
 
-func renderInventoryPanel(state *engine.State, width, height int) string {
+func renderInventoryPanel(state *engine.State, innerWidth, innerHeight int) string {
 	lines := []string{titleStyle.Render("Inventory"), ""}
 	if len(state.Player.Inventory) == 0 {
 		lines = append(lines, dimStyle.Render("(empty)"))
-		return sidePanelStyle.Width(width).Height(max(4, height)).Render(strings.Join(lines, "\n"))
+		return sidePanelStyle.Width(max(1, innerWidth)).Height(max(1, innerHeight)).Render(strings.Join(lines, "\n"))
 	}
 
 	keys := make([]string, 0, len(state.Player.Inventory))
@@ -366,12 +419,12 @@ func renderInventoryPanel(state *engine.State, width, height int) string {
 		lines = append(lines, fmt.Sprintf("• %s x%d", itemName, count))
 	}
 
-	return sidePanelStyle.Width(width).Height(max(4, height)).Render(strings.Join(lines, "\n"))
+	return sidePanelStyle.Width(max(1, innerWidth)).Height(max(1, innerHeight)).Render(strings.Join(lines, "\n"))
 }
 
 func helpLines() []string {
 	return []string{
-		titleStyle.Render("Commands"),
+		titleStyle.Render(commandsTitle),
 		"  help                Show this help",
 		"  status              Show current HUD",
 		"  explore             Explore once",
@@ -434,7 +487,16 @@ func itemDisplayName(itemID string) string {
 }
 
 func prettyID(id string) string {
-	return strings.Title(strings.ReplaceAll(id, "_", " "))
+	parts := strings.Fields(strings.ReplaceAll(id, "_", " "))
+	for i, part := range parts {
+		runes := []rune(strings.ToLower(part))
+		if len(runes) == 0 {
+			continue
+		}
+		runes[0] = unicode.ToUpper(runes[0])
+		parts[i] = string(runes)
+	}
+	return strings.Join(parts, " ")
 }
 
 func simpleBar(cur, maxV, width int) string {
@@ -465,20 +527,6 @@ func ratioBar(cur, maxV, width int) string {
 	return "[" + strings.Repeat("█", filled) + strings.Repeat("░", width-filled) + "]"
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 var (
 	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
 	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
@@ -504,4 +552,13 @@ var (
 			Padding(0, 1)
 
 	footerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+)
+
+const (
+	promptPlaceholder = "Type: help, explore, hunt 2, rest 1, use healing_potion, save"
+	welcomeLine       = "Welcome to Grimoire."
+	introLine         = "This is full-screen mode. Type 'help' for commands."
+	eventLogTitle     = "Event Log"
+	commandsTitle     = "Commands"
+	footerHint        = "Enter: run  •  ↑/↓: history  •  PgUp/PgDn/Home/End or wheel: scroll log  •  Ctrl+C: save & quit"
 )
