@@ -1,5 +1,7 @@
 package engine
 
+import "strings"
+
 // ================================
 // Inventory Helpers (Pure)
 // ================================
@@ -9,12 +11,16 @@ func GetItemCount(p *Player, itemID string) int {
 	if p.Inventory == nil {
 		return 0
 	}
-	return p.Inventory[itemID]
+	return p.Inventory[NormalizeItemID(itemID)]
 }
 
 // AddItem adds qty of an item to the player's inventory.
 func AddItem(p *Player, itemID string, qty int) {
 	if qty <= 0 {
+		return
+	}
+	itemID = NormalizeItemID(itemID)
+	if itemID == "" {
 		return
 	}
 	p.EnsureInventory()
@@ -25,6 +31,10 @@ func AddItem(p *Player, itemID string, qty int) {
 // If qty >= current count, the item is removed entirely.
 func RemoveItem(p *Player, itemID string, qty int) {
 	if qty <= 0 || p.Inventory == nil {
+		return
+	}
+	itemID = NormalizeItemID(itemID)
+	if itemID == "" {
 		return
 	}
 	have := p.Inventory[itemID]
@@ -43,7 +53,37 @@ func HasItem(p *Player, itemID string, qty int) bool {
 	if p.Inventory == nil {
 		return false
 	}
-	return p.Inventory[itemID] >= qty
+	return p.Inventory[NormalizeItemID(itemID)] >= qty
+}
+
+// NormalizeItemID converts user/save/catalog IDs to a canonical lower_snake_case key.
+func NormalizeItemID(itemID string) string {
+	parts := strings.Fields(strings.ToLower(strings.ReplaceAll(itemID, "-", " ")))
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "_")
+}
+
+// NormalizeInventory deduplicates inventory keys by canonical ID and removes invalid counts.
+func NormalizeInventory(inventory map[string]int) map[string]int {
+	if inventory == nil {
+		return map[string]int{}
+	}
+
+	normalized := make(map[string]int)
+	for rawID, qty := range inventory {
+		if qty <= 0 {
+			continue
+		}
+		itemID := NormalizeItemID(rawID)
+		if itemID == "" {
+			continue
+		}
+		normalized[itemID] += qty
+	}
+
+	return normalized
 }
 
 // ================================

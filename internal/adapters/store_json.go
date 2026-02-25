@@ -47,6 +47,7 @@ func (s *JSONStore) Load() (*engine.State, error) {
 
 	// Ensure inventory map exists
 	state.Player.EnsureInventory()
+	state.Player.Inventory = engine.NormalizeInventory(state.Player.Inventory)
 	state.Player.ClampHP()
 
 	return &state, nil
