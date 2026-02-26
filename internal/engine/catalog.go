@@ -52,8 +52,12 @@ var Items = map[string]Item{
 		Name: "Wolf Pelt",
 	},
 	"meat": {
-		ID:   "meat",
-		Name: "Meat",
+		ID:    "meat",
+		Name:  "Meat",
+		HPMin: 40,
+		HPMax: 40,
+		SPMin: 2,
+		SPMax: 2,
 	},
 	"bear_claw": {
 		ID:   "bear_claw",

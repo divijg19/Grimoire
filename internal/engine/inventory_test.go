@@ -81,3 +81,39 @@ func TestUseItem_AcceptsNonCanonicalID(t *testing.T) {
 		t.Fatalf("expected events emitted")
 	}
 }
+
+func TestUseItem_MeatRestoresFixedHPAndSP(t *testing.T) {
+	state := DefaultState()
+	state.Player.HP = 50
+	state.Player.SP = 1
+	AddItem(&state.Player, "meat", 1)
+
+	rng := &fixedRNG{ints: []int{0, 0}}
+	events, err := UseItem(&state, "meat", rng)
+	if err != nil {
+		t.Fatalf("UseItem returned error: %v", err)
+	}
+
+	if state.Player.HP != 90 {
+		t.Fatalf("expected HP 90 after meat use, got %d", state.Player.HP)
+	}
+	if state.Player.SP != 3 {
+		t.Fatalf("expected SP 3 after meat use, got %d", state.Player.SP)
+	}
+	if HasItem(&state.Player, "meat", 1) {
+		t.Fatalf("expected meat consumed")
+	}
+	if len(events) == 0 {
+		t.Fatalf("expected events emitted")
+	}
+}
+
+func TestUseItem_NoEffectItemReturnsError(t *testing.T) {
+	state := DefaultState()
+	AddItem(&state.Player, "torch", 1)
+
+	_, err := UseItem(&state, "torch", &fixedRNG{})
+	if err == nil {
+		t.Fatalf("expected no-use-effect error for torch")
+	}
+}

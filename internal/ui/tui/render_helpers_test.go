@@ -32,9 +32,9 @@ func TestItemDisplayName_NormalizesLookup(t *testing.T) {
 }
 
 func TestResizeMessage_ContainsBounds(t *testing.T) {
-	msg := resizeMessage(60, 20)
-	if !strings.Contains(msg, "60x20") {
-		t.Fatalf("resize message missing bounds: %q", msg)
+	msg := resizeMessage(58, 18, 60, 20)
+	if !strings.Contains(msg, "58x18") || !strings.Contains(msg, "60x20") {
+		t.Fatalf("resize message missing current/required bounds: %q", msg)
 	}
 }
 
