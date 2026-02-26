@@ -17,12 +17,6 @@ Install the latest release binary (Linux/macOS):
 curl -fsSL https://raw.githubusercontent.com/divijg19/Grimoire/main/scripts/install.sh | sh
 ```
 
-Install a specific tag:
-
-```
-curl -fsSL https://raw.githubusercontent.com/divijg19/Grimoire/main/scripts/install.sh | GRIMOIRE_VERSION=v1.0.0 sh
-```
-
 Installer script: `scripts/install.sh`
 
 ---
