@@ -76,7 +76,7 @@ func newModel(state *engine.State, store ports.Store, rng ports.RNG) model {
 }
 
 func (m model) Init() tea.Cmd {
-	return textinput.Blink
+	return nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -290,8 +290,16 @@ func (m *model) addLines(lines ...string) {
 	if len(m.logs) > 300 {
 		m.logs = m.logs[len(m.logs)-300:]
 	}
-	m.viewport.SetContent(strings.Join(m.logs, "\n"))
+	m.refreshViewportContent()
 	m.viewport.GotoBottom()
+}
+
+func (m *model) refreshViewportContent() {
+	if m.viewport.Width <= 0 {
+		m.viewport.SetContent(strings.Join(m.logs, "\n"))
+		return
+	}
+	m.viewport.SetContent(wrapLogLines(m.logs, m.viewport.Width))
 }
 
 func (m *model) layout() {
@@ -302,19 +310,19 @@ func (m *model) layout() {
 	if availWidth < minContentWidth {
 		m.viewport.Width = 1
 		m.viewport.Height = 1
-		m.viewport.SetContent(strings.Join(m.logs, "\n"))
+		m.refreshViewportContent()
 		return
 	}
 
 	leftOuter, _ := splitColumnOuterWidths(availWidth)
 
-	hudContentWidth := max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize())
-	hud := renderHUDPanel(m.state, hudContentWidth)
+	hud := renderHUDPanel(m.state, leftOuter)
 	hudHeight := lipgloss.Height(hud)
 
-	inputContentWidth := max(1, leftOuter-inputPanelStyle.GetHorizontalFrameSize())
-	m.input.Width = max(1, inputContentWidth-2)
-	inputHeight := inputPanelStyle.GetVerticalFrameSize() + promptContentHeight
+	inputLineWidth := max(1, leftOuter-inputPanelStyle.GetHorizontalFrameSize())
+	m.input.Width = max(1, inputLineWidth-2)
+	inputPanel := renderInputPanel(leftOuter, m.input.Value())
+	inputHeight := lipgloss.Height(inputPanel)
 	footerHeight := lipgloss.Height(renderFooter(availWidth))
 	titleHeight := lipgloss.Height(titleStyle.Render(eventLogTitle))
 	logFrameHeight := logPanelStyle.GetVerticalFrameSize()
@@ -330,7 +338,7 @@ func (m *model) layout() {
 
 	m.viewport.Width = viewportWidth
 	m.viewport.Height = logInnerHeight
-	m.viewport.SetContent(strings.Join(m.logs, "\n"))
+	m.refreshViewportContent()
 	m.viewport.GotoBottom()
 }
 
@@ -344,32 +352,43 @@ func (m model) View() string {
 	}
 	availWidth, availHeight := renderArea(m.width, m.height)
 
-	requiredHeight := m.minRenderableHeight(max(minContentWidth, availWidth))
-	requiredTermWidth := minTerminalWidth
-	requiredTermHeight := requiredHeight + outerMarginTop + outerMarginBottom
+	checkWidth := max(minContentWidth, availWidth)
+	checkLeftOuter, _ := splitColumnOuterWidths(checkWidth)
+	checkInputLineWidth := max(1, checkLeftOuter-inputPanelStyle.GetHorizontalFrameSize())
+	m.input.Width = max(1, checkInputLineWidth-2)
+
+	requiredHeight := m.minRenderableHeight(checkWidth)
+	requiredTermWidth := m.width
+	requiredTermHeight := m.height
+	if availWidth < minContentWidth {
+		requiredTermWidth = minTerminalWidth
+	}
+	if availHeight < requiredHeight {
+		requiredTermHeight = requiredHeight + outerMarginTop + outerMarginBottom
+	}
 	if availWidth < minContentWidth || availHeight < requiredHeight {
-		return warnStyle.Render(resizeMessage(requiredTermWidth, requiredTermHeight))
+		warning := resizeMessage(m.width, m.height, requiredTermWidth, requiredTermHeight)
+		return renderResizeWarning(m.width, warning)
 	}
 
-	leftOuter, _ := splitColumnOuterWidths(availWidth)
-	inputContentWidth := max(1, leftOuter-inputPanelStyle.GetHorizontalFrameSize())
-	m.input.Width = max(1, inputContentWidth-2)
+	leftOuter, rightOuter := splitColumnOuterWidths(availWidth)
+	inputLineWidth := max(1, leftOuter-inputPanelStyle.GetHorizontalFrameSize())
+	m.input.Width = max(1, inputLineWidth-2)
 
-	hud := renderHUDPanel(m.state, max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize()))
+	hud := renderHUDPanel(m.state, leftOuter)
 
 	logTitle := titleStyle.Render(eventLogTitle)
-	logPane := logPanelStyle.Width(max(1, leftOuter-logPanelStyle.GetHorizontalFrameSize())).Render(logTitle + "\n" + m.viewport.View())
+	logPaneContentWidth := max(1, leftOuter-logPanelStyle.GetHorizontalFrameSize())
+	logPane := logPanelStyle.Width(logPaneContentWidth).Render(logTitle + "\n" + m.viewport.View())
 
 	footer := renderFooter(availWidth)
-	input := renderInputPanel(inputContentWidth, m.input.View())
+	input := renderInputPanel(leftOuter, m.input.Value())
 
 	leftColumn := lipgloss.JoinVertical(lipgloss.Left, hud, logPane, input)
-	leftOuterActual := lipgloss.Width(leftColumn)
-	rightOuterActual := max(1, availWidth-columnGapCols-leftOuterActual)
 	rightPanel := renderInventoryPanel(
 		m.state,
-		max(1, rightOuterActual-sidePanelStyle.GetHorizontalFrameSize()),
-		max(1, lipgloss.Height(leftColumn)-sidePanelStyle.GetVerticalFrameSize()),
+		rightOuter,
+		max(1, lipgloss.Height(leftColumn)-inventoryPanelStyle.GetVerticalFrameSize()),
 	)
 	mainRow := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, strings.Repeat(" ", columnGapCols), rightPanel)
 	body := lipgloss.JoinVertical(lipgloss.Left, mainRow, footer)
@@ -378,10 +397,8 @@ func (m model) View() string {
 
 func (m model) minRenderableHeight(width int) int {
 	leftOuter, _ := splitColumnOuterWidths(width)
-	hudHeight := lipgloss.Height(renderHUDPanel(m.state, max(1, leftOuter-sidePanelStyle.GetHorizontalFrameSize())))
-	inputContentWidth := max(1, leftOuter-inputPanelStyle.GetHorizontalFrameSize())
-	_ = inputContentWidth
-	inputHeight := inputPanelStyle.GetVerticalFrameSize() + promptContentHeight
+	hudHeight := lipgloss.Height(renderHUDPanel(m.state, leftOuter))
+	inputHeight := lipgloss.Height(renderInputPanel(leftOuter, m.input.Value()))
 	footerHeight := lipgloss.Height(renderFooter(width))
 	minLogOuter := logPanelStyle.GetVerticalFrameSize() + lipgloss.Height(titleStyle.Render(eventLogTitle)) + 1
 	return hudHeight + inputHeight + footerHeight + minLogOuter
@@ -390,7 +407,7 @@ func (m model) minRenderableHeight(width int) int {
 func splitColumnOuterWidths(totalWidth int) (int, int) {
 	gap := columnGapCols
 	right := totalWidth / 3
-	minRight := sidePanelStyle.GetHorizontalFrameSize() + 18
+	minRight := inventoryPanelStyle.GetHorizontalFrameSize() + 18
 	minLeft := max(
 		sidePanelStyle.GetHorizontalFrameSize()+24,
 		max(
@@ -427,8 +444,20 @@ func splitColumnOuterWidths(totalWidth int) (int, int) {
 	return left, right
 }
 
-func resizeMessage(minWidth, minHeight int) string {
-	return fmt.Sprintf("Terminal too small. Resize to at least %dx%d.", minWidth, minHeight)
+func resizeMessage(currentWidth, currentHeight, requiredWidth, requiredHeight int) string {
+	return fmt.Sprintf(
+		"Terminal too small. Current: %dx%d. Required: at least %dx%d.",
+		currentWidth,
+		currentHeight,
+		requiredWidth,
+		requiredHeight,
+	)
+}
+
+func renderResizeWarning(termWidth int, message string) string {
+	availWidth := max(1, termWidth-outerMarginLeft-outerMarginRight)
+	wrapped := lipgloss.NewStyle().Width(availWidth).Render(message)
+	return outerFrameStyle.Render(warnStyle.Render(wrapped))
 }
 
 func renderArea(termWidth, termHeight int) (int, int) {
@@ -437,7 +466,7 @@ func renderArea(termWidth, termHeight int) (int, int) {
 	return availWidth, availHeight
 }
 
-func renderHUDPanel(state *engine.State, contentWidth int) string {
+func renderHUDPanel(state *engine.State, outerWidth int) string {
 	p := state.Player
 	need := engine.XPToNext(p.Level)
 
@@ -452,14 +481,16 @@ func renderHUDPanel(state *engine.State, contentWidth int) string {
 		fmt.Sprintf("Gold %d", p.Gold),
 		fmt.Sprintf("Commands %d", state.Meta.CommandCount),
 	}
-	return sidePanelStyle.Width(max(1, contentWidth)).Render(strings.Join(lines, "\n"))
+	contentWidth := max(1, outerWidth-sidePanelStyle.GetHorizontalFrameSize())
+	return sidePanelStyle.Width(contentWidth).Render(strings.Join(lines, "\n"))
 }
 
-func renderInventoryPanel(state *engine.State, contentWidth, contentHeight int) string {
+func renderInventoryPanel(state *engine.State, outerWidth, contentHeight int) string {
 	lines := []string{titleStyle.Render("Inventory"), ""}
+	contentWidth := max(1, outerWidth-inventoryPanelStyle.GetHorizontalFrameSize())
 	if len(state.Player.Inventory) == 0 {
 		lines = append(lines, dimStyle.Render("(empty)"))
-		return sidePanelStyle.Width(max(1, contentWidth)).Height(max(1, contentHeight)).Render(strings.Join(lines, "\n"))
+		return inventoryPanelStyle.Width(contentWidth).Height(max(1, contentHeight)).Render(strings.Join(lines, "\n"))
 	}
 
 	keys := make([]string, 0, len(state.Player.Inventory))
@@ -473,14 +504,25 @@ func renderInventoryPanel(state *engine.State, contentWidth, contentHeight int) 
 		lines = append(lines, fmt.Sprintf("• %s x%d", itemName, count))
 	}
 
-	return sidePanelStyle.Width(max(1, contentWidth)).Height(max(1, contentHeight)).Render(strings.Join(lines, "\n"))
+	return inventoryPanelStyle.Width(contentWidth).Height(max(1, contentHeight)).Render(strings.Join(lines, "\n"))
 }
 
-func renderInputPanel(contentWidth int, inputView string) string {
-	hint1 := dimStyle.Render(truncateText(promptExampleLine1, contentWidth))
-	hint2 := dimStyle.Render(truncateText(promptExampleLine2, contentWidth))
-	panelBody := strings.Join([]string{inputView, hint1, hint2}, "\n")
-	return inputPanelStyle.Width(max(1, contentWidth)).Height(promptContentHeight).Render(panelBody)
+func renderInputPanel(outerWidth int, inputValue string) string {
+	contentWidth := max(1, outerWidth-inputPanelStyle.GetHorizontalFrameSize())
+	lineWidth := max(1, contentWidth-2)
+	promptPrefix := "❯ "
+	prefixWidth := lipgloss.Width(promptPrefix)
+	cleanValue := strings.ReplaceAll(strings.ReplaceAll(inputValue, "\n", " "), "\r", " ")
+	inputTextWidth := max(1, lineWidth-prefixWidth)
+	inputText := truncateText(cleanValue, inputTextWidth)
+	inputLine := promptStyle.Render(promptPrefix) + inputText
+	if strings.TrimSpace(cleanValue) == "" {
+		inputLine = promptStyle.Render(promptPrefix) + dimStyle.Render(truncateText(promptPlaceholder, inputTextWidth))
+	}
+	hint1 := dimStyle.Render(truncateText(promptExampleLine1, lineWidth))
+	hint2 := dimStyle.Render(truncateText(promptExampleLine2, lineWidth))
+	panelBody := strings.Join([]string{inputLine, hint1, hint2}, "\n")
+	return inputPanelStyle.Width(contentWidth).Height(promptContentHeight).Render(panelBody)
 }
 
 func renderFooter(width int) string {
@@ -494,14 +536,38 @@ func truncateText(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return ""
 	}
-	r := []rune(s)
-	if len(r) <= maxWidth {
+	if lipgloss.Width(s) <= maxWidth {
 		return s
 	}
 	if maxWidth <= 1 {
-		return string(r[:maxWidth])
+		return "…"
 	}
-	return string(r[:maxWidth-1]) + "…"
+
+	limit := maxWidth - lipgloss.Width("…")
+	prefix := ""
+	for _, r := range s {
+		next := prefix + string(r)
+		if lipgloss.Width(next) > limit {
+			break
+		}
+		prefix = next
+	}
+	return prefix + "…"
+}
+
+func wrapLogLines(lines []string, width int) string {
+	if width <= 0 {
+		return strings.Join(lines, "\n")
+	}
+
+	wrapStyle := lipgloss.NewStyle().Width(width)
+	out := make([]string, 0, len(lines)*2)
+	for _, line := range lines {
+		wrapped := wrapStyle.Render(line)
+		out = append(out, strings.Split(wrapped, "\n")...)
+	}
+
+	return strings.Join(out, "\n")
 }
 
 func helpLines() []string {
@@ -626,7 +692,12 @@ var (
 	logPanelStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("8")).
-			Padding(0, 0, 0, 1)
+			Padding(0, 1)
+
+	inventoryPanelStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("8")).
+				Padding(0)
 
 	inputPanelStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
@@ -651,10 +722,10 @@ const (
 
 	promptPlaceholder   = "Type: help, explore, hunt 2, rest 1, use healing_potion, save"
 	welcomeLine         = "Welcome to Grimoire."
-	introLine           = "This is full-screen mode. Type 'help' for commands."
+	introLine           = "Enter 'help' for commands."
 	eventLogTitle       = "Event Log"
 	commandsTitle       = "Commands"
-	footerHint          = "Enter: run  •  ↑/↓: history  •  Wheel/Ctrl+J/K: line scroll log  •  PgUp/PgDn/Home/End  •  Ctrl+C: save & quit"
+	footerHint          = "Enter: run  •  ↑/↓: history  •  PgUp/PgDn/Home/End | Wheel/Ctrl+J/K: log | line scroll  •  Ctrl+C: save & quit"
 	promptExampleLine1  = "Example: help | explore | hunt 2 | rest 1"
 	promptExampleLine2  = "Use: use healing_potion | save | exit"
 	promptContentHeight = 3

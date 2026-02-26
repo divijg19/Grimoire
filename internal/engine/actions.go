@@ -194,26 +194,41 @@ func UseItem(state *State, itemID string, rng RNG) (Events, error) {
 		return events, errors.New("unknown item")
 	}
 
-	// Healing potion (only usable item for now)
-	if itemID == "healing_potion" {
-		hpGain := item.HPMin + rng.Intn(item.HPMax-item.HPMin+1)
-		spGain := item.SPMin + rng.Intn(item.SPMax-item.SPMin+1)
-
+	hpGain := 0
+	if item.HPMax > 0 {
+		hpMin := item.HPMin
+		hpMax := item.HPMax
+		if hpMax < hpMin {
+			hpMax = hpMin
+		}
+		hpGain = hpMin + rng.Intn(hpMax-hpMin+1)
 		state.Player.HP += hpGain
-		state.Player.SP += spGain
-		state.Player.ClampHP()
-
-		RemoveItem(&state.Player, itemID, 1)
-
-		events = append(events,
-			ItemRemoved{ItemID: itemID, Count: 1},
-			HPRestored{Amount: hpGain},
-		)
-
-		return events, nil
 	}
 
-	return events, errors.New("item has no use effect")
+	spGain := 0
+	if item.SPMax > 0 {
+		spMin := item.SPMin
+		spMax := item.SPMax
+		if spMax < spMin {
+			spMax = spMin
+		}
+		spGain = spMin + rng.Intn(spMax-spMin+1)
+		state.Player.SP += spGain
+	}
+
+	if hpGain == 0 && spGain == 0 {
+		return events, errors.New("item has no use effect")
+	}
+
+	state.Player.ClampHP()
+	RemoveItem(&state.Player, itemID, 1)
+
+	events = append(events, ItemRemoved{ItemID: itemID, Count: 1})
+	if hpGain > 0 {
+		events = append(events, HPRestored{Amount: hpGain})
+	}
+
+	return events, nil
 }
 
 // ================================

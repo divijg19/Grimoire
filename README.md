@@ -9,8 +9,27 @@ This README documents the project broadly (design, commands, mechanics, persiste
 
 ---
 
+Installation (curl installer)
+
+Install the latest release binary (Linux/macOS):
+
+```
+curl -fsSL https://raw.githubusercontent.com/divijg19/Grimoire/main/scripts/install.sh | sh
+```
+
+Install a specific tag:
+
+```
+curl -fsSL https://raw.githubusercontent.com/divijg19/Grimoire/main/scripts/install.sh | GRIMOIRE_VERSION=v1.0.0 sh
+```
+
+Installer script: `scripts/install.sh`
+
+---
+
 Table of contents
 
+- Installation (curl installer)
 - Overview
 - Files
 - Quickstart
@@ -153,7 +172,7 @@ Using an item:
 python main.py use healing_potion
 ```
 
-If the `item_id` is present and a use-effect is defined (currently `healing_potion`), the effect will be applied and the item decremented in the stacked inventory.
+If the `item_id` is present and a use-effect is defined (for example `healing_potion` or `meat`), the effect will be applied and the item decremented in the stacked inventory.
 
 Inventory helpers implemented:
 
@@ -381,15 +400,19 @@ Single source-of-truth roadmap for completed and planned milestones.
 
 | Milestone | Status | Notes | Next actions |
 |---|---|---|---|
-| v0.0 (Python reference) | Completed | Original compact implementation in `main.py` with one-shot commands, REPL, persistence, combat, items, and admin helpers. | Keep for portability and semantic reference. |
-| v1.0 (Go refactor) | Completed | Clean architecture implemented across `cmd/grimoire` and `internal/{engine,ports,adapters,ui}` with full-screen TUI and CLI fallback. | Maintain parity and keep boundaries documented. |
-| v1.1 (UI & UX polish) | Completed | Layout/clipping fixes, prompt/hud/inventory stability, compact command help, and improved event rendering. | Add optional snapshot-style rendering checks if desired. |
-| v1.2 (TUI completion) | Completed | Full-screen alt-screen TUI reached feature parity with commands, stabilized layout behavior, and retained `--cli` fallback mode. | Keep event rendering and interaction hints aligned with gameplay changes. |
-| v1.3 (Testing foundation) | Completed | Unit/regression suites now cover engine mechanics, inventory normalization, adapter persistence paths, and focused TUI render/layout helpers. | Expand event-shape assertions and command-dispatch tests. |
-| v1.4 (CI automation) | Planned | Repository has test coverage but no automated validation pipeline yet. | Add CI to run `gofmt`, `go vet`, and `go test ./...` on push/PR. |
-| v1.5 (Installer artifacts) | Planned | Publish versioned release artifacts via GitHub Actions and support curl-based install flow for Linux/macOS users. | Add release workflow, checksum/signing step, and documented `curl | sh` installer entrypoint. |
-| v1.6 (Hardening) | Planned | Concurrent save safety and adapter contract robustness are still open. | Add file-locking strategy and integration tests. |
-| v1.7 (Performance & tooling) | Planned | Benchmark and profiling workflows are not yet in place. | Add benchmark suites and lint/format tooling integration. |
+| v0.0.x (Python reference) | Completed | Original compact implementation in `main.py` with one-shot commands, REPL, persistence, combat, items, and admin helpers. | Keep for portability and semantic reference. |
+| v0.1.0 (Go refactor) | Completed | Clean architecture implemented across `cmd/grimoire` and `internal/{engine,ports,adapters,ui}` with full-screen TUI and CLI fallback. | Maintain parity and keep boundaries documented. |
+| v0.1.1 (UI & UX polish) | Completed | Layout/clipping fixes, prompt/hud/inventory stability, compact command help, and improved event rendering. | Add optional snapshot-style rendering checks if desired. |
+| v0.1.2 (TUI completion) | Completed | Full-screen alt-screen TUI reached feature parity with commands, stabilized layout behavior, and retained `--cli` fallback mode. | Keep event rendering and interaction hints aligned with gameplay changes. |
+| v0.1.3 (Testing foundation) | Completed | Unit/regression suites now cover engine mechanics, inventory normalization, adapter persistence paths, and focused TUI render/layout helpers. | Expand event-shape assertions and command-dispatch tests. |
+| v0.1.4 (CI automation) | Completed | Tag-triggered GitHub Actions workflow runs tests and builds multi-platform binaries. | Add branch/PR CI checks for pre-release validation. |
+| v0.1.5 (Installer artifacts) | Completed | Release assets are published and installable via `curl` + `scripts/install.sh` from `divijg19/Grimoire`. | Add signature verification for supply-chain hardening. |
+| v0.1.6 (Hardening) | Planned | Concurrent save safety and adapter contract robustness are still open. | Add file-locking strategy and integration tests. |
+| v0.1.7 (Performance & tooling) | Planned | Benchmark and profiling workflows are not yet in place. | Add benchmark suites and lint/format tooling integration. |
+~
+| pre-v1.0 (Content Expansion) | Planned | New items, enemies, and mechanics can be added while maintaining the same core structure. | Add new content and ensure it is covered by tests and documented in the README. |
+| v1.0 (Stable release) | Planned | After hardening and performance work, cut a v1.0 release with a polished installer and documentation. | Finalize README, add more examples, and ensure cross-platform build/install paths are solid. |
+~
 | v2.0 (Optional Zig storage) | Long-term / Planned | Optional storage fast-path in Zig via existing `Store` interface boundary. | Design/validate FFI adapter and cross-platform build path. |
 
 
