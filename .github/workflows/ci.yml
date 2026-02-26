@@ -3,14 +3,43 @@ name: ci
 on:
   push:
     tags:
-      - "*"
+      - "v*"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
+  verify-tag-on-main:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.tag.outputs.tag_name }}
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag name
+        id: tag
+        run: echo "tag_name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure tagged commit is on main
+        run: |
+          git fetch origin main --depth=1
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/main"; then
+            echo "Tag ${GITHUB_REF_NAME} does not point to a commit on main."
+            echo "Create/push tags from merged main commits to run release CI."
+            exit 1
+          fi
+
   test:
+    needs: verify-tag-on-main
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -44,7 +73,7 @@ jobs:
             ext: ".exe"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -68,8 +97,6 @@ jobs:
   release:
     needs: build-artifacts
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
